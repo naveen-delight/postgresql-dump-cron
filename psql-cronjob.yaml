@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: psql
+spec:
+  schedule: "0 */4 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: psql
+            image: asia-south1-docker.pkg.dev/mahindra-mpaas-development/postgres-sql/postgres-sql:3
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                apt-get update && apt-get install -y curl gnupg2 lsb-release
+                echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+                curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+                apt-get update && apt-get install -y google-cloud-sdk
+                gcloud auth activate-service-account --key-file=/app/mahindra-mpaas-development-76c30411ebb0.json
+                PGPASSWORD=sailor pg_dump -h kratos-postgresql -p 5432 -U sailor -d kratos > /data/postgresql_$(date +'%Y-%m-%d-%H%M%S').sql && gsutil cp -r /data/postgresql_$(date +'%Y-%m-%d-%H%M%S').sql gs://mpaas-mongodb-postgresdb-dumps/postgressql-dumps/postgres_$(date +'%Y-%m-%d-%H%M%S').sql
+            volumeMounts:
+            - name: psql-volume
+              mountPath: /data
+          restartPolicy: OnFailure
+          volumes:
+          - name: psql-volume
+            emptyDir: {}
+
